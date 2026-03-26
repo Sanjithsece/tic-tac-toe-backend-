@@ -2,43 +2,86 @@ const Room = require("../models/Room");
 const generateRoomCode = require("../utils/generateRoomCode");
 
 exports.createRoom = async (req, res) => {
-  const { type } = req.body;
+  try {
+    const type = req.body.type?.trim();
 
-  let roomCode;
-  do {
-    roomCode = generateRoomCode();
-  } while (await Room.findOne({ roomCode }));
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
 
-  const room = await Room.create({
-    roomCode,
-    type,
-    players: [req.user._id]
-  });
+    if (!["public", "private"].includes(type)) {
+      return res.status(400).json({ message: "Invalid room type" });
+    }
 
-  res.status(201).json(room);
+    let roomCode;
+    do {
+      roomCode = generateRoomCode();
+    } while (await Room.findOne({ roomCode }));
+
+    const room = await Room.create({
+      roomCode,
+      type,
+      players: [req.user._id],
+      status: "waiting"
+    });
+
+    res.status(201).json(room);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+exports.getPublicRooms = async (req, res) => {
+  try {
+    const rooms = await Room.find({
+      type: "public",
+      status: "waiting"
+    }).select("roomCode players createdAt");
+
+    res.json(rooms);
+  } catch (error) {
+    res.status(500).json({ message: "Server Error" });
+  }
 };
 
 exports.joinRoom = async (req, res) => {
-  const { roomCode } = req.body;
+  try {
+    const roomCode = req.body.roomCode?.trim().toUpperCase();
 
-  const room = await Room.findOne({ roomCode });
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
 
-  if (!room)
-    return res.status(404).json({ message: "Room not found" });
+    if (!roomCode) {
+      return res.status(400).json({ message: "Room code is required" });
+    }
 
-  if (room.players.includes(req.user._id))
-    return res.status(400).json({ message: "Already joined" });
+    const room = await Room.findOne({ roomCode });
 
-  if (room.players.length >= 2)
-    return res.status(400).json({ message: "Room full" });
+    if (!room)
+      return res.status(404).json({ message: "Room not found" });
 
-  room.players.push(req.user._id);
+    const alreadyJoined = room.players.some(
+      (playerId) => playerId.toString() === req.user._id.toString()
+    );
 
-  if (room.players.length === 2) {
-    room.status = "playing";
+    if (alreadyJoined) {
+      return res.json(room);
+    }
+
+    if (room.players.length >= 2)
+      return res.status(400).json({ message: "Room full" });
+
+    room.players.push(req.user._id);
+
+    if (room.players.length === 2) {
+      room.status = "playing";
+    }
+
+    await room.save();
+
+    res.json(room);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Server Error" });
   }
-
-  await room.save();
-
-  res.json(room);
 };

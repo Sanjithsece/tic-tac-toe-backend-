@@ -1,23 +1,29 @@
 const nodemailer = require("nodemailer");
 
-const sendEmail = async (options) => {
+const sendEmail = async ({ email, subject, html }) => {
+
+  // Create fake SMTP account automatically
+  const testAccount = await nodemailer.createTestAccount();
+
   const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
+    host: testAccount.smtp.host,
+    port: testAccount.smtp.port,
+    secure: testAccount.smtp.secure,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: testAccount.user,
+      pass: testAccount.pass
     }
   });
 
-  const message = {
-    from: `TicTacToe <${process.env.EMAIL_USER}>`,
-    to: options.email,
-    subject: options.subject,
-    html: options.html
-  };
+  const info = await transporter.sendMail({
+    from: '"TicTacToe App" <no-reply@tictac.com>',
+    to: email,
+    subject,
+    html
+  });
 
-  await transporter.sendMail(message);
+  console.log("Reset Link Preview URL:");
+  console.log(nodemailer.getTestMessageUrl(info));
 };
 
 module.exports = sendEmail;

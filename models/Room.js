@@ -23,6 +23,7 @@ const roomSchema = new mongoose.Schema(
       enum: ["waiting", "playing", "finished"],
       default: "waiting"
     }
+
   },
   { timestamps: true }
 );
